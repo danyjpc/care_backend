@@ -1,0 +1,12 @@
+﻿version: '3'
+
+services:
+  care:
+    build: .
+    container_name: care-core
+    restart: always
+    env_file:
+      - ./server-variables.env
+    ports:
+      - "7000:80"
+      - "8000:443"

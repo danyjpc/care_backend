@@ -1,0 +1,73 @@
+# Docker
+# Build a Docker image 
+# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+
+trigger:
+  - develop
+  - master
+  
+variables:
+  DOCKER_BUILDKIT: 1
+  isMain: $[eq(variables['Build.SourceBranch'], 'refs/heads/master')]
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+  - stage: SERVER_DEVELOP
+    condition: eq(variables.isMain, false)
+    jobs:
+      - job: Build_and_push_docker_image
+        steps:
+        - task: Docker@2
+          inputs:
+            displayName: Login to PeopleApps Registry
+            containerRegistry: 'PeopleApps Registry'
+            command: 'login'
+        - task: Docker@2
+          inputs:
+            displayName: Build docker image and push to hub server
+            containerRegistry: 'PeopleApps Registry'
+            repository: 'care-core'
+            command: 'buildAndPush'
+            Dockerfile: 'care-core/Dockerfile'
+            tags: 'beta'
+        - task: Docker@2
+          inputs:
+            displayName: close session for registry
+            containerRegistry: 'PeopleApps Registry'
+            command: 'logout'
+
+      - job: Deploy_to_Beta
+        dependsOn: Build_and_push_docker_image
+        steps:
+        - task: SSH@0
+          inputs:
+            sshEndpoint: 'develop-server'
+            runOptions: 'commands'
+            commands: |
+              /opt/docker-services/care-beta/deploy.sh 2> /opt/docker-services/care-beta/deploy.log
+            readyTimeout: '20000'
+
+  - stage: SEVER_PROD
+    condition: eq(variables.isMain, true)
+    jobs:
+      - job: Build_and_push_docker_image_prod
+        steps:
+        - task: Docker@2
+          inputs:
+            displayName: Login to PeopleApps Registry
+            containerRegistry: 'PeopleApps Registry'
+            command: 'login'
+        - task: Docker@2
+          inputs:
+            displayName: Build docker image and push to hub server
+            repository: 'care-core'
+            command: 'buildAndPush'
+            Dockerfile: 'care-core/Dockerfile'
+            tags: 'latest'
+        - task: Docker@2
+          inputs:
+            displayName: close session for registry
+            containerRegistry: 'PeopleApps Registry'
+            command: 'logout'
